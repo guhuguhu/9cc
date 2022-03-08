@@ -135,7 +135,8 @@ Token *tokenize(char *p) {
 
     if (!strncmp(p, ">=", 2) || !strncmp(p, "<=", 2) || 
         !strncmp(p, "==", 2) || !strncmp(p, "!=", 2)) {
-        cur = new_token(TK_RESERVED, cur, p+=2);
+        cur = new_token(TK_RESERVED, cur, p);
+        p += 2;
         cur->len = 2;
         continue;
     }
