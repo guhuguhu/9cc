@@ -12,6 +12,13 @@ Token *token;
 // ローカル変数
 LVar *locals;
 
+int is_alnum(char c) {
+  return ('a' <= c && c <= 'z') ||
+         ('A' <= c && c <= 'Z') ||
+         ('0' <= c && c <= '9') ||
+         (c == '_');
+}
+
 // エラーを報告するための関数
 // printfと同じ引数を取る
 void error(char *fmt, ...) {
@@ -39,7 +46,8 @@ void error_at(char *loc, char *fmt, ...) {
 // 次のトークンが期待している記号のときには、トークンを1つ読み進めて
 // 真を返す。それ以外の場合には偽を返す。
 bool consume(char *op) {
-  if (token->kind != TK_RESERVED || 
+  if (token->kind == TK_IDENT || token->kind == TK_NUM || 
+      token->kind == TK_EOF ||
       strlen(op) != token->len ||
       memcmp(token->str, op, token->len))
     return false;
@@ -106,6 +114,13 @@ void tokenize() {
       continue;
     }
 
+    if (strncmp(p, "return", 6) == 0 && !is_alnum(p[6])) {
+        cur = new_token(TK_RETURN, cur, p);
+        p += 6;
+        cur->len = 6;
+        continue;
+    }
+
     if (!strncmp(p, ">=", 2) || !strncmp(p, "<=", 2) || 
         !strncmp(p, "==", 2) || !strncmp(p, "!=", 2)) {
         cur = new_token(TK_RESERVED, cur, p);
@@ -125,7 +140,7 @@ void tokenize() {
     char *first = p;
     while ('a' <= *p && *p <= 'z')
         p++;
-    if(p > first) {
+    if (p > first) {
       cur = new_token(TK_IDENT, cur, first);
       cur->len = p-first;
       continue;
@@ -280,8 +295,18 @@ Node *expr() {
 }
 
 Node *stmt() {
-  Node *node = expr();
-  expect(";");
+  Node *node;
+
+  if (consume("return")) {
+    node = calloc(1, sizeof(Node));
+    node->kind = ND_RETURN;
+    node->lhs = expr();
+  } else {
+    node = expr();
+  }
+
+  if (!consume(";"))
+    error_at(token->str, "';'ではないトークンです");
   return node;
 }
 
