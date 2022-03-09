@@ -28,5 +28,6 @@ assert 1 "1 == 3<4 + 4 > 0;"
 assert 1 "1 != 0;"
 assert 0 "1 <= 1 != 1 >= 1;"
 assert 6 "a = b = 1 + 2; a = a + b;"
+assert 7 "abc = 1 + 2; d = 3; abc = abc + 1 + d;"
 
 echo OK
