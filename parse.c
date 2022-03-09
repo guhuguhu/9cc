@@ -44,6 +44,18 @@ bool consume(char *op) {
   return true;
 }
 
+// 次のトークンが識別子のときには、トークンを1つ読み進めて
+// そのトークンを返す。それ以外の場合にはNULLを返す。
+Token *consume_ident() {
+    if(token->kind == TK_IDENT) {
+        Token *t = token;
+        token = token->next;
+        return t;
+    }
+    else 
+        return NULL;
+}
+
 // 次のトークンが期待している記号のときには、トークンを1つ読み進める。
 // それ以外の場合にはエラーを報告する。
 void expect(char *op) {
@@ -78,7 +90,8 @@ Token *new_token(TokenKind kind, Token *cur, char *str) {
 }
 
 // 入力文字列pをトークナイズしてそれを返す
-Token *tokenize(char *p) {
+void tokenize() {
+  char *p = user_input;
   Token head;
   head.next = NULL;
   Token *cur = &head;
@@ -99,8 +112,15 @@ Token *tokenize(char *p) {
     }
 
     if (*p == '+' || *p == '-' || *p == '*' || *p == '/' ||
-        *p == '(' || *p == ')' || *p == '>' || *p == '<') {
+        *p == '(' || *p == ')' || *p == '>' || *p == '<' ||
+        *p == '=' || *p == ';') {
       cur = new_token(TK_RESERVED, cur, p++);
+      cur->len = 1;
+      continue;
+    }
+
+    if ('a' <= *p && *p <= 'z') {
+      cur = new_token(TK_IDENT, cur, p++);
       cur->len = 1;
       continue;
     }
@@ -111,12 +131,15 @@ Token *tokenize(char *p) {
       continue;
     }
 
+
     error_at(p, "トークナイズできません");
   }
 
   new_token(TK_EOF, cur, p);
-  return head.next;
+  token = head.next;
 }
+
+Node *code[100];
 
 Node *new_node(NodeKind kind, Node *lhs, Node *rhs) {
   Node *node = calloc(1, sizeof(Node));
@@ -133,19 +156,57 @@ Node *new_node_num(int val) {
   return node;
 }
 
-Node *expr() {
-  Node *node = equal();
-  return node;
+Node *expr();
+
+Node *primary() {
+  // 次のトークンが"("なら、"(" expr ")"のはず
+  if (consume("(")) {
+    Node *node = expr();
+    expect(")");
+    return node;
+  }
+
+  Token *tok = consume_ident();
+  if (tok) {
+    Node *node = calloc(1, sizeof(Node));
+    node->kind = ND_LVAR;
+    node->offset = (tok->str[0] - 'a' + 1) * 8;
+    return node;
+  }
+
+  // そうでなければ数値のはず
+  return new_node_num(expect_number());
 }
 
-Node *equal() {
-  Node *node = rel();
+Node *unary() {
+  if (consume("+"))
+    return primary();
+  if (consume("-"))
+    return new_node(ND_SUB, new_node_num(0), primary());
+  return primary();
+}
+
+Node *mul() {
+  Node *node = unary();
 
   for (;;) {
-    if (consume("=="))
-      node = new_node(ND_EQ, node, rel());
-    else if (consume("!="))
-      node = new_node(ND_NE, node, rel());
+    if (consume("*"))
+      node = new_node(ND_MUL, node, unary());
+    else if (consume("/"))
+      node = new_node(ND_DIV, node, unary());
+    else
+      return node;
+  }
+}
+
+Node *add() {
+  Node *node = mul();
+
+  for (;;) {
+    if (consume("+"))
+      node = new_node(ND_ADD, node, mul());
+    else if (consume("-"))
+      node = new_node(ND_SUB, node, mul());
     else
       return node;
   }
@@ -168,48 +229,39 @@ Node *rel() {
   }
 }
 
-Node *add() {
-  Node *node = mul();
+Node *equal() {
+  Node *node = rel();
 
   for (;;) {
-    if (consume("+"))
-      node = new_node(ND_ADD, node, mul());
-    else if (consume("-"))
-      node = new_node(ND_SUB, node, mul());
+    if (consume("=="))
+      node = new_node(ND_EQ, node, rel());
+    else if (consume("!="))
+      node = new_node(ND_NE, node, rel());
     else
       return node;
   }
 }
 
-Node *mul() {
-  Node *node = unary();
-
-  for (;;) {
-    if (consume("*"))
-      node = new_node(ND_MUL, node, unary());
-    else if (consume("/"))
-      node = new_node(ND_DIV, node, unary());
-    else
-      return node;
-  }
+Node *assign() {
+  Node *node = equal();
+  if (consume("="))
+    node = new_node(ND_ASSIGN, node, assign());
+  return node;
 }
 
-Node *unary() {
-  if (consume("+"))
-    return primary();
-  if (consume("-"))
-    return new_node(ND_SUB, new_node_num(0), primary());
-  return primary();
+Node *expr() {
+  return assign();
 }
 
-Node *primary() {
-  // 次のトークンが"("なら、"(" expr ")"のはず
-  if (consume("(")) {
-    Node *node = expr();
-    expect(")");
-    return node;
-  }
+Node *stmt() {
+  Node *node = expr();
+  expect(";");
+  return node;
+}
 
-  // そうでなければ数値のはず
-  return new_node_num(expect_number());
+void program() {
+  int i = 0;
+  while (!at_eof())
+    code[i++] = stmt();
+  code[i] = NULL;
 }
