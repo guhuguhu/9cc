@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include "9cc.h"
 
+int lbl_num = 1; //ラベルの番号
+
 void gen_lval(Node *node) {
   if (node->kind != ND_LVAR)
     error("代入の左辺値が変数ではありません");
@@ -11,6 +13,7 @@ void gen_lval(Node *node) {
 }
 
 void gen(Node *node) {
+  if(node == NULL) return ;
   switch (node->kind) {
   case ND_NUM:
     printf("  push %d\n", node->val);
@@ -22,16 +25,62 @@ void gen(Node *node) {
     printf("  push rax\n");
     return;
   case ND_ASSIGN:
-    gen_lval(node->lhs);
-    gen(node->rhs);
+    gen_lval(node->child[0]);
+    gen(node->child[1]);
 
     printf("  pop rdi\n");
     printf("  pop rax\n");
     printf("  mov [rax], rdi\n");
     printf("  push rdi\n");
     return;
+  case ND_IF:
+    if(node->child[2]) {
+      gen(node->child[0]);
+      printf("  pop rax\n");
+      printf("  cmp rax, 0\n");
+      printf("je  .Lelse%d\n",lbl_num);
+      gen(node->child[1]);
+      printf("jmp .Lend%d\n",lbl_num+1);
+      printf(".Lelse%d:\n",lbl_num);
+      gen(node->child[2]);
+      printf(".Lend%d:\n",lbl_num+1);
+      lbl_num += 2;
+    } else {
+      gen(node->child[0]);
+      printf("  pop rax\n");
+      printf("  cmp rax, 0\n");
+      printf("je  .Lend%d\n",lbl_num);
+      gen(node->child[1]);
+      printf(".Lend%d:\n",lbl_num);
+      lbl_num++;
+    }
+    return;
+  case ND_WHILE:
+    printf(".Lbegin%d:\n",lbl_num);  
+    gen(node->child[0]);
+    printf("  pop rax\n");
+    printf("  cmp rax, 0\n");
+    printf("je  .Lend%d\n",lbl_num+1);
+    gen(node->child[1]);
+    printf("jmp .Lbegin%d\n",lbl_num);
+    printf(".Lend%d:\n",lbl_num+1); 
+    lbl_num += 2;
+    return;
+  case ND_FOR:
+    gen(node->child[0]);
+    printf(".Lbegin%d:\n",lbl_num);  
+    gen(node->child[1]);
+    printf("  pop rax\n");
+    printf("  cmp rax, 0\n");
+    printf("je  .Lend%d\n",lbl_num+1);
+    gen(node->child[3]);
+    gen(node->child[2]);
+    printf("jmp .Lbegin%d\n",lbl_num);
+    printf(".Lend%d:\n",lbl_num+1); 
+    lbl_num += 2;
+    return;
   case ND_RETURN:
-    gen(node->lhs);
+    gen(node->child[0]);
     printf("  pop rax\n");
     printf("  mov rsp, rbp\n");
     printf("  pop rbp\n");
@@ -39,8 +88,8 @@ void gen(Node *node) {
     return;   
   }
 
-  gen(node->lhs);
-  gen(node->rhs);
+  gen(node->child[0]);
+  gen(node->child[1]);
 
   printf("  pop rdi\n");
   printf("  pop rax\n");

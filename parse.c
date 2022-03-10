@@ -6,18 +6,8 @@
 #include <string.h>
 #include "9cc.h"
 
-// 現在着目しているトークン
-Token *token;
-
 // ローカル変数
 LVar *locals;
-
-int is_alnum(char c) {
-  return ('a' <= c && c <= 'z') ||
-         ('A' <= c && c <= 'Z') ||
-         ('0' <= c && c <= '9') ||
-         (c == '_');
-}
 
 // エラーを報告するための関数
 // printfと同じ引数を取る
@@ -70,7 +60,8 @@ Token *consume_ident() {
 // 次のトークンが期待している記号のときには、トークンを1つ読み進める。
 // それ以外の場合にはエラーを報告する。
 void expect(char *op) {
-  if (token->kind != TK_RESERVED || 
+  if (token->kind == TK_IDENT || token->kind == TK_NUM || 
+      token->kind == TK_EOF || 
       strlen(op) != token->len ||
       memcmp(token->str, op, token->len))
     error_at(token->str, "'%c'ではありません", op);
@@ -91,75 +82,6 @@ bool at_eof() {
   return token->kind == TK_EOF;
 }
 
-// 新しいトークンを作成してcurに繋げる
-Token *new_token(TokenKind kind, Token *cur, char *str) {
-  Token *tok = calloc(1, sizeof(Token));
-  tok->kind = kind;
-  tok->str = str;
-  cur->next = tok;
-  return tok;
-}
-
-// 入力文字列pをトークナイズしてそれを返す
-void tokenize() {
-  char *p = user_input;
-  Token head;
-  head.next = NULL;
-  Token *cur = &head;
-  char str[20];
-  while (*p) {
-    // 空白文字をスキップ
-    if (isspace(*p)) {
-      p++;
-      continue;
-    }
-
-    if (strncmp(p, "return", 6) == 0 && !is_alnum(p[6])) {
-        cur = new_token(TK_RETURN, cur, p);
-        p += 6;
-        cur->len = 6;
-        continue;
-    }
-
-    if (!strncmp(p, ">=", 2) || !strncmp(p, "<=", 2) || 
-        !strncmp(p, "==", 2) || !strncmp(p, "!=", 2)) {
-        cur = new_token(TK_RESERVED, cur, p);
-        p += 2;
-        cur->len = 2;
-        continue;
-    }
-
-    if (*p == '+' || *p == '-' || *p == '*' || *p == '/' ||
-        *p == '(' || *p == ')' || *p == '>' || *p == '<' ||
-        *p == '=' || *p == ';') {
-      cur = new_token(TK_RESERVED, cur, p++);
-      cur->len = 1;
-      continue;
-    }
-
-    char *first = p;
-    while ('a' <= *p && *p <= 'z')
-        p++;
-    if (p > first) {
-      cur = new_token(TK_IDENT, cur, first);
-      cur->len = p-first;
-      continue;
-    }
-
-    if (isdigit(*p)) {
-      cur = new_token(TK_NUM, cur, p);
-      cur->val = strtol(p, &p, 10);
-      continue;
-    }
-
-
-    error_at(p, "トークナイズできません");
-  }
-
-  new_token(TK_EOF, cur, p);
-  token = head.next;
-}
-
 // 変数を名前で検索する。見つからなかった場合はNULLを返す。
 LVar *find_lvar(Token *tok) {
   for (LVar *var = locals; var; var = var->next)
@@ -173,8 +95,8 @@ Node *code[100];
 Node *new_node(NodeKind kind, Node *lhs, Node *rhs) {
   Node *node = calloc(1, sizeof(Node));
   node->kind = kind;
-  node->lhs = lhs;
-  node->rhs = rhs;
+  node->child[0] = lhs;
+  node->child[1] = rhs;
   return node;
 }
 
@@ -297,10 +219,61 @@ Node *expr() {
 Node *stmt() {
   Node *node;
 
+  if (consume("if")) {
+    node = calloc(1, sizeof(Node));
+    node->kind = ND_IF;
+    expect("(");
+    node->child[0] = expr();
+    expect(")");
+    node->child[1] = stmt();
+    if (consume("else")) {
+      node->child[2] = stmt();
+    } else {
+      node->child[2] = NULL;
+    }
+    return node;
+  }
+
+  if(consume("while")) {
+    node = calloc(1, sizeof(Node));
+    node->kind = ND_WHILE;
+    expect("(");
+    node->child[0] = expr();
+    expect(")");
+    node->child[1] = stmt();
+    return node;
+  }
+
+  if(consume("for")) {
+    node = calloc(1, sizeof(Node));
+    node->kind = ND_FOR;
+    expect("(");
+    if(consume(";")) {
+      node->child[0] = NULL;
+    } else {
+      node->child[0] = expr();
+      expect(";");
+    }
+    if(consume(";")) {
+      node->child[1] = NULL;
+    } else {
+      node->child[1] = expr();
+      expect(";");
+    }
+    if(consume(")")) {
+      node->child[2] = NULL;
+    } else {
+      node->child[2] = expr();
+      expect(")");
+    }
+    node->child[3] = stmt();
+    return node;
+  }
+
   if (consume("return")) {
     node = calloc(1, sizeof(Node));
     node->kind = ND_RETURN;
-    node->lhs = expr();
+    node->child[0] = expr();
   } else {
     node = expr();
   }
