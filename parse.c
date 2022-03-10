@@ -219,6 +219,17 @@ Node *expr() {
 Node *stmt() {
   Node *node;
 
+  if (consume("{")) {
+    node = calloc(1, sizeof(Node));
+    node->kind = ND_BLOCK;
+    Node *n = node; 
+    while (!consume("}")) {
+      n->next = stmt();
+      n = n->next;
+    }
+    return node;
+  }
+
   if (consume("if")) {
     node = calloc(1, sizeof(Node));
     node->kind = ND_IF;
