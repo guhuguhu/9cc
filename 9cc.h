@@ -67,17 +67,28 @@ struct LVar {
   int offset; // RBPからのオフセット
 };
 
+typedef struct Func Func;
+
+// 関数の情報
+struct Func {
+  char *name; // 名前
+  int name_len; // 名前の長さ
+  int arg_num; // 引数の数
+  LVar *locals; // ローカル変数
+  Node *stmt[100]; // 文  
+};
+
 extern Token *token;
 
 extern char *user_input;
 
-extern Node *code[100];
-
-extern LVar *locals;
+extern Func *func_info[100];
+extern Func *cur_func_info;
 
 void tokenize();
 void error(char *fmt, ...);
 void error_at(char *loc, char *fmt, ...);
 void program();
 void gen(Node *node);
+void gen_func();
 

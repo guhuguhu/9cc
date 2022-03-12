@@ -2,6 +2,7 @@
 #include "9cc.h"
 
 int lbl_num = 1; //ラベルの番号
+char *arg_reg[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
 
 void gen_lval(Node *node) {
   if (node->kind != ND_LVAR)
@@ -13,7 +14,6 @@ void gen_lval(Node *node) {
 }
 
 void gen(Node *node) {
-  char *arg_reg[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
   int i;
   Node *arg;
   if(node == NULL) return ;
@@ -161,4 +161,32 @@ void gen(Node *node) {
   }
 
   printf("  push rax\n");
+}
+
+// 関数のコード生成
+void gen_func() {
+  int i;
+  // 関数名
+  printf(".globl ");
+  for(i = 0; i < cur_func_info->name_len; i++)
+    printf("%c", cur_func_info->name[i]);
+  printf("\n");
+  for(i = 0; i < cur_func_info->name_len; i++)
+    printf("%c", cur_func_info->name[i]);
+  printf(":\n");
+
+  // プロローグ
+  // 変数26個分の領域を確保する
+  printf("  push rbp\n");
+  printf("  mov rbp, rsp\n");
+  printf("  sub rsp, %d\n", cur_func_info->locals->offset);
+
+  // 引数をレジスタからスタックにコピーする
+  for(i = 0; i < cur_func_info->arg_num; i++) {
+    printf("  mov rax, -8\n");
+    printf("  mov [rbp + rax * %d], %s\n", i+1, arg_reg[i]);
+  }
+  // 先頭の式から順にコード生成
+  for (i = 0; cur_func_info->stmt[i]; i++) 
+    gen(cur_func_info->stmt[i]);
 }

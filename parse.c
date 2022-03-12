@@ -6,8 +6,11 @@
 #include <string.h>
 #include "9cc.h"
 
-// ローカル変数
-LVar *locals;
+// 関数の情報
+Func *func_info[100];
+
+// 現在着目している関数
+Func *cur_func_info;
 
 // エラーを報告するための関数
 // printfと同じ引数を取る
@@ -84,13 +87,11 @@ bool at_eof() {
 
 // 変数を名前で検索する。見つからなかった場合はNULLを返す。
 LVar *find_lvar(Token *tok) {
-  for (LVar *var = locals; var; var = var->next)
+  for (LVar *var = cur_func_info->locals; var; var = var->next)
     if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
       return var;
   return NULL;
 }
-
-Node *code[100];
 
 Node *new_node(NodeKind kind, Node *lhs, Node *rhs) {
   Node *node = calloc(1, sizeof(Node));
@@ -145,12 +146,12 @@ Node *primary() {
       node->offset = lvar->offset;
     } else {
       lvar = calloc(1, sizeof(LVar));
-      lvar->next = locals;
+      lvar->next = cur_func_info->locals;
       lvar->name = tok->str;
       lvar->len = tok->len;
-      lvar->offset = locals->offset + 8;
+      lvar->offset = cur_func_info->locals->offset + 8;
       node->offset = lvar->offset;
-      locals = lvar;
+      cur_func_info->locals = lvar;
     }
     return node;
   }
@@ -312,13 +313,54 @@ Node *stmt() {
   return node;
 }
 
-void program() {
-  locals = calloc(1, sizeof(LVar));
-  locals->offset = 0;
+void func() {
+  cur_func_info->locals = calloc(1, sizeof(LVar));
+  cur_func_info->locals->offset = 0;
   int i = 0;
-  while (!at_eof())
-    code[i++] = stmt();
-  code[i] = NULL;
+
+  Token *tok = consume_ident();
+  if (!tok) error_at(token->str, "関数定義ではありません\n");
+  cur_func_info->name = tok->str;
+  cur_func_info->name_len = tok->len;
+  cur_func_info->arg_num = 0;
+  expect("(");
+  if(!consume(")")) {
+    Token *lo_tok = consume_ident();
+    LVar *lo_var = calloc(1, sizeof(LVar));
+    lo_var->next = cur_func_info->locals;
+    lo_var->name = lo_tok->str;
+    lo_var->len = lo_tok->len;
+    lo_var->offset = cur_func_info->locals->offset + 8;
+    cur_func_info->locals = lo_var;
+    cur_func_info->arg_num++;
+    while (!consume(")")) {
+      expect(",");
+      lo_tok = consume_ident();
+      if(!lo_tok) error_at(token->str, "識別子ではありません\n");
+      lo_var = calloc(1, sizeof(LVar));
+      lo_var->next = cur_func_info->locals;
+      lo_var->name = lo_tok->str;
+      lo_var->len = lo_tok->len;
+      lo_var->offset = cur_func_info->locals->offset + 8;
+      cur_func_info->locals = lo_var;
+      cur_func_info->arg_num++;
+    }
+  }
+  expect("{");
+  while (!consume("}"))
+    cur_func_info->stmt[i++] = stmt();
+  cur_func_info->stmt[i] = NULL;
+}
+
+void program() {
+  int i = 0;
+  while (!at_eof()) {
+    func_info[i] = calloc(1, sizeof(Func));
+    cur_func_info = func_info[i];
+    func();
+    i++;
+  }
+  func_info[i] = NULL;
 }
 
 
