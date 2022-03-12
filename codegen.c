@@ -13,6 +13,9 @@ void gen_lval(Node *node) {
 }
 
 void gen(Node *node) {
+  char *arg_reg[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
+  int i;
+  Node *arg;
   if(node == NULL) return ;
   switch (node->kind) {
   case ND_NUM:
@@ -91,6 +94,28 @@ void gen(Node *node) {
     printf("  pop rbp\n");
     printf("  ret\n");
     return;   
+  case ND_CALL:
+    i=0;
+    arg = node->args;
+    while(arg) {
+      gen(arg);
+      printf("  pop %s\n", arg_reg[i++]);
+      arg = arg->args;
+    }
+    printf("  mov rax, rsp\n");
+    printf("  cqo\n");
+    printf("  mov r8, 16\n");
+    printf("  idiv r8\n");
+    printf("  sub rsp, rdx\n");
+    printf("  call ");
+    char *func_name = node->func_name;
+    for(i=0;i<node->func_name_len;i++) { 
+      printf("%c",*func_name);
+      func_name++;
+    }
+    printf("\n");
+    printf("  push rax\n");
+    return;
   }
 
   gen(node->child[0]);
