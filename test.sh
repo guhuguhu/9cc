@@ -23,4 +23,5 @@ assert 55 "main(){sum = 0; for(i=1; i<=10; i=i+1) sum = sum + i; return sum;}"
 assert 55 "main(){sum=0; i = 0; while(i<=10) {sum = sum+i; i=i+1;} return sum;}"
 assert 3 "add(a, b) {return a+b;} main(){return add(1,2);}"
 assert 120 "f(n){if(n==0) return 1; return n*f(n-1);} main(){return f(5);}"
+assert 10 "main(){a=10; b=&a; return *b;}"
 echo OK

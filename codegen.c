@@ -27,6 +27,15 @@ void gen(Node *node) {
     printf("  mov rax, [rax]\n");
     printf("  push rax\n");
     return;
+  case ND_ADDR:
+    gen_lval(node->child[0]);
+    return;
+  case ND_DEREF:
+    gen(node->child[0]);
+    printf("  pop rax\n");
+    printf("  mov rax, [rax]\n");
+    printf("  push rax\n");
+    return;
   case ND_ASSIGN:
     gen_lval(node->child[0]);
     gen(node->child[1]);
@@ -189,4 +198,5 @@ void gen_func() {
   // 先頭の式から順にコード生成
   for (i = 0; cur_func_info->stmt[i]; i++) 
     gen(cur_func_info->stmt[i]);
+  
 }
