@@ -67,7 +67,7 @@ void expect(char *op) {
       token->kind == TK_EOF || 
       strlen(op) != token->len ||
       memcmp(token->str, op, token->len))
-    error_at(token->str, "'%c'ではありません", op);
+    error_at(token->str, "\"%s\"ではありません", op);
   token = token->next;
 }
 
@@ -110,8 +110,9 @@ Node *new_node_num(int val) {
 
 Node *expr();
 
+
 Node *primary() {
-  // 次のトークンが"("なら、"(" expr ")"のはず
+  // "(" expr ")"
   if (consume("(")) {
     Node *node = expr();
     expect(")");
@@ -120,6 +121,7 @@ Node *primary() {
 
   Token *tok = consume_ident();
 
+  // (ident "(" ")") | (ident "(" ident ("," ident)* ")")
   if (tok && consume("(")) {
     Node *node = calloc(1, sizeof(Node));
     node->kind = ND_CALL;
@@ -137,6 +139,7 @@ Node *primary() {
     }
   }
 
+  // ident 
   if (tok) {
     Node *node = calloc(1, sizeof(Node));
     node->kind = ND_LVAR;
@@ -145,21 +148,16 @@ Node *primary() {
     if (lvar) {
       node->offset = lvar->offset;
     } else {
-      lvar = calloc(1, sizeof(LVar));
-      lvar->next = cur_func_info->locals;
-      lvar->name = tok->str;
-      lvar->len = tok->len;
-      lvar->offset = cur_func_info->locals->offset + 8;
-      node->offset = lvar->offset;
-      cur_func_info->locals = lvar;
+      error_at(tok->str, "宣言されていない変数です");
     }
     return node;
   }
 
-  // そうでなければ数値のはず
+  // num
   return new_node_num(expect_number());
 }
 
+// ("+" primary) | ("-" primary) | ("*" unary) | ("&" unary)
 Node *unary() {
   if (consume("+"))
     return primary();
@@ -172,6 +170,7 @@ Node *unary() {
   return primary();
 }
 
+// unary (("*" | "/") unary)*
 Node *mul() {
   Node *node = unary();
 
@@ -185,6 +184,7 @@ Node *mul() {
   }
 }
 
+// mul (("+" | "-") mul)*
 Node *add() {
   Node *node = mul();
 
@@ -198,6 +198,7 @@ Node *add() {
   }
 }
 
+// add (("<" | "<=" | ">" | ">=") add)*
 Node *rel() {
   Node *node = add();
 
@@ -215,6 +216,7 @@ Node *rel() {
   }
 }
 
+// rel (("==" | "!=") rel)*
 Node *equal() {
   Node *node = rel();
 
@@ -228,6 +230,7 @@ Node *equal() {
   }
 }
 
+// equal ("=" assign)?
 Node *assign() {
   Node *node = equal();
   if (consume("="))
@@ -235,6 +238,7 @@ Node *assign() {
   return node;
 }
 
+// assign
 Node *expr() {
   return assign();
 }
@@ -242,6 +246,7 @@ Node *expr() {
 Node *stmt() {
   Node *node;
 
+// "{" stmt* "}"
   if (consume("{")) {
     node = calloc(1, sizeof(Node));
     node->kind = ND_BLOCK;
@@ -253,6 +258,7 @@ Node *stmt() {
     return node;
   }
 
+// "if" "(" expr ")" stmt ("else" stmt)?
   if (consume("if")) {
     node = calloc(1, sizeof(Node));
     node->kind = ND_IF;
@@ -268,6 +274,7 @@ Node *stmt() {
     return node;
   }
 
+// "while" "(" expr ")" stmt
   if(consume("while")) {
     node = calloc(1, sizeof(Node));
     node->kind = ND_WHILE;
@@ -278,6 +285,7 @@ Node *stmt() {
     return node;
   }
 
+// "for" "(" expr? ";" expr? ";" expr? ")" stmt
   if(consume("for")) {
     node = calloc(1, sizeof(Node));
     node->kind = ND_FOR;
@@ -304,24 +312,54 @@ Node *stmt() {
     return node;
   }
 
+// "return" expr ;
   if (consume("return")) {
     node = calloc(1, sizeof(Node));
     node->kind = ND_RETURN;
     node->child[0] = expr();
-  } else {
-    node = expr();
+    expect(";");
+    return node;
   }
 
-  if (!consume(";"))
-    error_at(token->str, "';'ではないトークンです");
+// "int" ident ;
+  if (consume("int")) {
+    node = calloc(1, sizeof(Node));
+    node->kind = ND_INT;
+    Token *tok = consume_ident();
+
+    if (!tok) 
+      error_at(token->str, "識別子ではありません");
+
+    node->child[0] = calloc(1, sizeof(Node));
+    node->child[0]->kind = ND_LVAR;
+
+    LVar *lvar = find_lvar(tok);
+    if (lvar) 
+      error_at(tok->str, "変数を多重定義しています");
+    lvar = calloc(1, sizeof(LVar));
+    lvar->next = cur_func_info->locals;
+    lvar->name = tok->str;
+    lvar->len = tok->len;
+    lvar->offset = cur_func_info->locals->offset + 8;
+    node->child[0]->offset = lvar->offset;
+    cur_func_info->locals = lvar;
+
+    expect(";");
+    return node;
+  }
+
+  // expr ;
+  node =expr();
+  expect(";");
   return node;
 }
 
+// ("int" ident "(" ")") | ("int" ident "(" "int" ident ("," "int" ident)* ")") "{" stmt* "}"
 void func() {
   cur_func_info->locals = calloc(1, sizeof(LVar));
   cur_func_info->locals->offset = 0;
   int i = 0;
-
+  expect("int"); 
   Token *tok = consume_ident();
   if (!tok) error_at(token->str, "関数定義ではありません\n");
   cur_func_info->name = tok->str;
@@ -329,7 +367,9 @@ void func() {
   cur_func_info->arg_num = 0;
   expect("(");
   if(!consume(")")) {
+    expect("int");
     Token *lo_tok = consume_ident();
+    if(!lo_tok) error_at(token->str, "識別子ではありません\n");
     LVar *lo_var = calloc(1, sizeof(LVar));
     lo_var->next = cur_func_info->locals;
     lo_var->name = lo_tok->str;
@@ -339,6 +379,7 @@ void func() {
     cur_func_info->arg_num++;
     while (!consume(")")) {
       expect(",");
+      expect("int");
       lo_tok = consume_ident();
       if(!lo_tok) error_at(token->str, "識別子ではありません\n");
       lo_var = calloc(1, sizeof(LVar));
@@ -356,6 +397,7 @@ void func() {
   cur_func_info->stmt[i] = NULL;
 }
 
+// func* 
 void program() {
   int i = 0;
   while (!at_eof()) {

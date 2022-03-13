@@ -72,6 +72,13 @@ void tokenize() {
         continue;
     }
 
+    if (strncmp(p, "int", 3) == 0 && !is_alnum(p[3])) {
+        cur = new_token(TK_INT, cur, p);
+        p += 3;
+        cur->len = 3;
+        continue;
+    }
+
     if (!strncmp(p, ">=", 2) || !strncmp(p, "<=", 2) || 
         !strncmp(p, "==", 2) || !strncmp(p, "!=", 2)) {
         cur = new_token(TK_RESERVED, cur, p);
