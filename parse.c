@@ -147,6 +147,7 @@ Node *primary() {
     LVar *lvar = find_lvar(tok);
     if (lvar) {
       node->offset = lvar->offset;
+      node->type = lvar->type;
     } else {
       error_at(tok->str, "宣言されていない変数です");
     }
@@ -324,9 +325,17 @@ Node *stmt() {
 // "int" ident ;
   if (consume("int")) {
     node = calloc(1, sizeof(Node));
-    node->kind = ND_INT;
+    node->kind = ND_DEC;
+    Type *type = calloc(1, sizeof(Type));
+    type->ty = INT;
+    while(consume("*")) {
+      Type *t = calloc(1, sizeof(Type));
+      t->ty = PTR;
+      t->ptr_to = type;
+      type = t;
+    }
+    
     Token *tok = consume_ident();
-
     if (!tok) 
       error_at(token->str, "識別子ではありません");
 
@@ -341,6 +350,7 @@ Node *stmt() {
     lvar->name = tok->str;
     lvar->len = tok->len;
     lvar->offset = cur_func_info->locals->offset + 8;
+    lvar->type = type;
     node->child[0]->offset = lvar->offset;
     cur_func_info->locals = lvar;
 
@@ -359,7 +369,16 @@ void func() {
   cur_func_info->locals = calloc(1, sizeof(LVar));
   cur_func_info->locals->offset = 0;
   int i = 0;
-  expect("int"); 
+  expect("int");
+  Type *type = calloc(1, sizeof(Type));
+  type->ty = INT;
+  while(consume("*")) {
+    Type *t = calloc(1, sizeof(Type));
+    t->ty = PTR;
+    t->ptr_to = type;
+    type = t;
+  }
+  cur_func_info->ret_type = type;
   Token *tok = consume_ident();
   if (!tok) error_at(token->str, "関数定義ではありません\n");
   cur_func_info->name = tok->str;
@@ -368,6 +387,14 @@ void func() {
   expect("(");
   if(!consume(")")) {
     expect("int");
+    Type *type = calloc(1, sizeof(Type));
+    type->ty = INT;
+    while(consume("*")) {
+      Type *t = calloc(1, sizeof(Type));
+      t->ty = PTR;
+      t->ptr_to = type;
+      type = t;
+    }
     Token *lo_tok = consume_ident();
     if(!lo_tok) error_at(token->str, "識別子ではありません\n");
     LVar *lo_var = calloc(1, sizeof(LVar));
@@ -375,11 +402,20 @@ void func() {
     lo_var->name = lo_tok->str;
     lo_var->len = lo_tok->len;
     lo_var->offset = cur_func_info->locals->offset + 8;
+    lo_var->type = type;
     cur_func_info->locals = lo_var;
     cur_func_info->arg_num++;
     while (!consume(")")) {
       expect(",");
       expect("int");
+      Type *type = calloc(1, sizeof(Type));
+      type->ty = INT;
+      while(consume("*")) {
+        Type *t = calloc(1, sizeof(Type));
+        t->ty = PTR;
+        t->ptr_to = type;
+        type = t;
+      }   
       lo_tok = consume_ident();
       if(!lo_tok) error_at(token->str, "識別子ではありません\n");
       lo_var = calloc(1, sizeof(LVar));
@@ -387,6 +423,7 @@ void func() {
       lo_var->name = lo_tok->str;
       lo_var->len = lo_tok->len;
       lo_var->offset = cur_func_info->locals->offset + 8;
+      lo_var->type = type;
       cur_func_info->locals = lo_var;
       cur_func_info->arg_num++;
     }

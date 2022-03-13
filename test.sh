@@ -24,4 +24,5 @@ assert 55 "int main(){int sum; sum=0; int i; i = 0; while(i<=10) {sum = sum+i; i
 assert 3 "int add(int a, int b) {return a+b;} int main(){return add(1,2);}"
 assert 120 "int f(int n){if(n==0) return 1; return n*f(n-1);} int main(){return f(5);}"
 assert 10 "int main(){int a; a=10; int b; b=&a; return *b;}"
+assert 3 "int main(){int a; int *b; b = &a; *b = 3; return a;}"
 echo OK
