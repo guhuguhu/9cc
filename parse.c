@@ -93,18 +93,46 @@ LVar *find_lvar(Token *tok) {
   return NULL;
 }
 
+Func *find_func(char *name, int len) {
+  int i = 0;
+  for (int i = 0; func_info[i]; i++) {
+    if (func_info[i]->name_len == len && !memcmp(func_info[i]->name, name, len))
+      return func_info[i];     
+  }
+  return NULL;
+}
+
 Node *new_node(NodeKind kind, Node *lhs, Node *rhs) {
   Node *node = calloc(1, sizeof(Node));
   node->kind = kind;
   node->child[0] = lhs;
   node->child[1] = rhs;
-  return node;
+  switch (kind) {
+  case ND_ASSIGN:
+    if(lhs->type->ty == rhs->type->ty)
+      node->type = rhs->type;
+    else 
+      error_at(token->str, "左の式と右の式の型が違います。\n");
+    return node;
+  default:
+    if (lhs->type->ty == INT && rhs->type->ty == INT)
+      node->type = lhs->type;
+    else if (lhs->type->ty == PTR && rhs->type->ty == INT) 
+      node->type = lhs->type;
+    else if (lhs->type->ty == INT && rhs->type->ty == PTR) 
+      node->type = rhs->type;
+    else if (lhs->type->ty == PTR && rhs->type->ty == PTR) 
+      error_at(token->str, "左の式と右の式の両方がポインタ型です。\n");
+    return node;
+  }
 }
 
 Node *new_node_num(int val) {
   Node *node = calloc(1, sizeof(Node));
   node->kind = ND_NUM;
   node->val = val;
+  node->type = calloc(1, sizeof(Type));
+  node->type->ty = INT;
   return node;
 }
 
@@ -127,6 +155,10 @@ Node *primary() {
     node->kind = ND_CALL;
     node->func_name = tok->str;
     node->func_name_len = tok->len;
+    Func *func = find_func(tok->str, tok->len);
+    if (!func) 
+      error_at(tok->str, "未宣言の関数です");
+    node->type = func->ret_type;
     Node *n = node;
     if (consume(")")) 
       return node;
@@ -164,10 +196,29 @@ Node *unary() {
     return primary();
   if (consume("-"))
     return new_node(ND_SUB, new_node_num(0), primary());
-  if (consume("*"))
-    return new_node(ND_DEREF, unary(), NULL);
-  if (consume("&"))
-    return new_node(ND_ADDR, unary(), NULL);
+  if (consume("*")) {
+    Node *node = calloc(1, sizeof(Node));
+    node->kind = ND_DEREF;
+    node->child[0] = unary();
+    node->type = node->child[0]->type->ptr_to;
+    return node;
+  }
+  if (consume("&")) {
+    Node *node = calloc(1, sizeof(Node));
+    node->kind = ND_ADDR;
+    node->child[0] = unary();
+    node->type = calloc(1, sizeof(Type));
+    node->type->ty = PTR;
+    node->type->ptr_to = node->child[0]->type;
+    return node;
+  }
+  if (consume("sizeof")) {
+    Node *node = unary();
+    if (node->type->ty == INT) 
+      return new_node_num(4);
+    else if (node->type->ty = PTR)
+      return new_node_num(8);
+  }
   return primary();
 }
 

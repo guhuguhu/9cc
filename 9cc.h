@@ -9,6 +9,7 @@ typedef enum {
   TK_WHILE,    // while
   TK_FOR,      // for
   TK_INT,      // int
+  TK_SIZEOF,   // sizeof
   TK_EOF,      // 入力の終わりを表すトークン
 } TokenKind;
 
@@ -45,6 +46,7 @@ typedef enum {
   ND_CALL, // 関数呼び出し
   ND_NUM, // 整数
   ND_DEC, // 宣言
+  ND_SIZEOF, // sizeof
 } NodeKind;
 
 typedef struct Type Type;

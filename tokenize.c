@@ -14,6 +14,12 @@ int is_alnum(char c) {
          (c == '_');
 }
 
+int is_alpha(char c) {
+  return ('a' <= c && c <= 'z') ||
+         ('A' <= c && c <= 'Z') ||
+         (c == '_');
+}
+
 // 新しいトークンを作成してcurに繋げる
 Token *new_token(TokenKind kind, Token *cur, char *str) {
   Token *tok = calloc(1, sizeof(Token));
@@ -35,6 +41,13 @@ void tokenize() {
     if (isspace(*p)) {
       p++;
       continue;
+    }
+
+    if (strncmp(p, "sizeof", 6) == 0 && !is_alnum(p[6])) {
+        cur = new_token(TK_SIZEOF, cur, p);
+        p += 6;
+        cur->len = 6;
+        continue;
     }
 
     if (strncmp(p, "return", 6) == 0 && !is_alnum(p[6])) {
@@ -97,9 +110,10 @@ void tokenize() {
     }
 
     char *first = p;
-    while ('a' <= *p && *p <= 'z')
+    if (is_alpha(*p)) {
+      p++;
+      while (is_alnum(*p))
         p++;
-    if (p > first) {
       cur = new_token(TK_IDENT, cur, first);
       cur->len = p-first;
       continue;
