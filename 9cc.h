@@ -44,14 +44,15 @@ typedef enum {
   ND_BLOCK, // {}
   ND_CALL, // 関数呼び出し
   ND_NUM, // 整数
-  ND_DEC,
+  ND_DEC, // 宣言
 } NodeKind;
 
 typedef struct Type Type;
 
+// 変数の型
 struct Type {
-  enum { INT, PTR } ty;
-  struct Type *ptr_to;
+  enum { INT, PTR } ty; // intかポインタか
+  struct Type *ptr_to; // ポインタの指す型
 };
 
 typedef struct Node Node;
@@ -62,11 +63,11 @@ struct Node {
   Node *child[4]; // 子ノード
   Node *next;    // kindがND_BLOCKの場合、ブロック内の文。kindがND_CALLの場合、引数。
   int val;       // kindがND_NUMの場合のみ使う
-  int offset;    // kindがND_LVARの場合のみ使う
-  Type *type;
-  char *func_name; // kindがND_CALLの場合のみ使う。
-  int func_name_len; // kindがND_CALLの場合のみ使う。
-  Node *args;     // kindがND_CALLの場合のみ使う。
+  int offset;    // kindがND_LVARの場合のみ使う。rbpからのオフセット。
+  Type *type; // kindがND_LVARの場合のみ使う。型
+  char *func_name; // kindがND_CALLの場合のみ使う。 関数の名前
+  int func_name_len; // kindがND_CALLの場合のみ使う。関数の名前の長さ
+  Node *args;     // kindがND_CALLの場合のみ使う。引数の数
 };
 
 typedef struct LVar LVar;
@@ -77,7 +78,7 @@ struct LVar {
   char *name; // 変数の名前
   int len;    // 名前の長さ
   int offset; // RBPからのオフセット
-  Type *type;
+  Type *type; // 型
 };
 
 typedef struct Func Func;

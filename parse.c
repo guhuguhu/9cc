@@ -322,7 +322,7 @@ Node *stmt() {
     return node;
   }
 
-// "int" ident ;
+// "int" "*"* ident ;
   if (consume("int")) {
     node = calloc(1, sizeof(Node));
     node->kind = ND_DEC;

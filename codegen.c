@@ -20,7 +20,7 @@ void gen_lval(Node *node) {
 }
 
 void gen(Node *node) {
-  int i;
+  int i, arg_num;
   Node *arg;
   if(node == NULL) return ;
   switch (node->kind) {
@@ -110,26 +110,52 @@ void gen(Node *node) {
     printf("  ret\n");
     return;   
   case ND_CALL:
-    i=0;
+    arg_num = 0;
     arg = node->args;
     while(arg) {
       gen(arg);
-      printf("  pop %s\n", arg_reg[i++]);
       arg = arg->args;
+      arg_num++;
     }
     printf("  mov rax, rsp\n");
     printf("  cqo\n");
-    printf("  mov r8, 16\n");
-    printf("  idiv r8\n");
-    printf("  sub rsp, rdx\n");
+    printf("  mov r10, 16\n");
+    printf("  idiv r10\n");
+    if (arg_num % 2 == 0)
+      printf("  cmp rdx, 0\n");
+    else 
+      printf("  cmp rdx, 8\n");
+    printf("  jne .Lstack_adjust%d\n", lbl_num);
+    i = arg_num;
+    while(i > 0) 
+      printf("  pop %s\n", arg_reg[--i]);
     printf("  call ");
     char *func_name = node->func_name;
-    for(i=0;i<node->func_name_len;i++) { 
+    for(int i=0;i<node->func_name_len;i++) { 
       printf("%c",*func_name);
       func_name++;
     }
     printf("\n");
+    printf("jmp .Lend%d\n",lbl_num+1);
+    printf(".Lstack_adjust%d:\n",lbl_num);
+    i = arg_num;
+    while(i > 0) 
+      printf("  pop %s\n", arg_reg[--i]);
+    printf("  sub rsp, 8\n");
+    printf("  call ");
+    func_name = node->func_name;
+    for(int i=0;i<node->func_name_len;i++) { 
+      printf("%c",*func_name);
+      func_name++;
+    }
+    printf("\n");
+    printf("  add rsp, 8\n");
+    printf(".Lend%d:\n",lbl_num+1);
     printf("  push rax\n");
+    lbl_num += 2;
+
+    return;
+  case ND_DEC:
     return;
   }
 
@@ -141,9 +167,23 @@ void gen(Node *node) {
 
   switch (node->kind) {
   case ND_ADD:
+    if(node->child[0]->type->ty == PTR) {
+      if(node->child[0]->type->ptr_to->ty == INT) 
+        printf("  mov r9, 4\n");
+      else if(node->child[0]->type->ptr_to->ty == PTR) 
+        printf("  mov r9, 8\n");
+      printf("  imul rdi, r9\n");
+    } 
     printf("  add rax, rdi\n");
     break;
   case ND_SUB:
+    if(node->child[0]->type->ty == PTR) {
+      if(node->child[0]->type->ptr_to->ty == INT) 
+        printf("  mov r9, 4\n");
+      else if(node->child[0]->type->ptr_to->ty == PTR) 
+        printf("  mov r9, 8\n");
+      printf("  imul rdi, r9\n");
+    } 
     printf("  sub rax, rdi\n");
     break;
   case ND_MUL:
