@@ -10,10 +10,7 @@ void gen_lval(Node *node) {
     printf("  sub rax, %d\n", node->offset);
     printf("  push rax\n");
   } else if(node->kind == ND_DEREF) {
-    gen_lval(node->child[0]);
-    printf("  pop rax\n");
-    printf("  mov rax, [rax]\n");
-    printf("  push rax\n");
+    gen(node->child[0]);
   } else {
     error("代入の左辺が適切な形式ではありません");
   }
@@ -28,6 +25,10 @@ void gen(Node *node) {
     printf("  push %d\n", node->val);
     return;
   case ND_LVAR:
+    if (node->type->ty == ARRAY) {
+      gen_lval(node);
+      return;
+    }
     gen_lval(node);
     printf("  pop rax\n");
     printf("  mov rax, [rax]\n");
@@ -100,6 +101,7 @@ void gen(Node *node) {
   case ND_BLOCK:
     while (node = node->next) {
       gen(node);
+      printf("  pop rax\n");
     }
     return;
   case ND_RETURN:
@@ -167,23 +169,56 @@ void gen(Node *node) {
 
   switch (node->kind) {
   case ND_ADD:
-    if(node->child[0]->type->ty == PTR) {
-      if(node->child[0]->type->ptr_to->ty == INT) 
+    if(node->child[0]->type->ty == PTR ||
+       node->child[0]->type->ty == ARRAY) {
+      switch(node->child[0]->type->ptr_to->ty) {
+      case INT:
         printf("  mov r9, 4\n");
-      else if(node->child[0]->type->ptr_to->ty == PTR) 
+        break;
+      case PTR:
         printf("  mov r9, 8\n");
+        break;
+      case ARRAY:
+        printf("  mov r9, %ld\n", 
+               node->child[0]->type->ptr_to->array_size);
+        break;
+      }
       printf("  imul rdi, r9\n");
-    } 
+    } else if(node->child[1]->type->ty == PTR ||
+              node->child[1]->type->ty == ARRAY) {
+      switch(node->child[1]->type->ptr_to->ty) {
+      case INT:
+        printf("  mov r9, 4\n");
+        break;
+      case PTR:
+        printf("  mov r9, 8\n");
+        break;
+      case ARRAY:
+        printf("  mov r9, %ld\n", 
+               node->child[1]->type->ptr_to->array_size);
+        break;
+      }
+      printf("  imul rax, r9\n");
+    }
     printf("  add rax, rdi\n");
     break;
   case ND_SUB:
-    if(node->child[0]->type->ty == PTR) {
-      if(node->child[0]->type->ptr_to->ty == INT) 
+    if(node->child[0]->type->ty == PTR ||
+       node->child[0]->type->ty == ARRAY) {
+      switch(node->child[0]->type->ptr_to->ty) {
+      case INT:
         printf("  mov r9, 4\n");
-      else if(node->child[0]->type->ptr_to->ty == PTR) 
+        break;
+      case PTR:
         printf("  mov r9, 8\n");
+        break;
+      case ARRAY:
+        printf("  mov r9, %ld\n", 
+               node->child[0]->type->ptr_to->array_size);
+        break;
+      }
       printf("  imul rdi, r9\n");
-    } 
+    }
     printf("  sub rax, rdi\n");
     break;
   case ND_MUL:
@@ -244,5 +279,6 @@ void gen_func() {
   // 先頭の式から順にコード生成
   for (i = 0; cur_func_info->stmt[i]; i++) 
     gen(cur_func_info->stmt[i]);
+    printf("  pop rax\n");
   
 }

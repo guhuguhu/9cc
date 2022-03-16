@@ -53,8 +53,9 @@ typedef struct Type Type;
 
 // 変数の型
 struct Type {
-  enum { INT, PTR } ty; // intかポインタか
+  enum { INT, PTR, ARRAY } ty; // intかポインタか配列
   struct Type *ptr_to; // ポインタの指す型
+  size_t array_size; // 配列のサイズ
 };
 
 typedef struct Node Node;

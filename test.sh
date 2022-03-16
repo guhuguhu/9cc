@@ -25,4 +25,7 @@ assert 3 "int add(int a, int b) {return a+b;} int main(){return add(1,2);}"
 assert 120 "int f(int n){if(n==0) return 1; return n*f(n-1);} int main(){return f(5);}"
 assert 3 "int main(){int a; int *b; b = &a; *b = 3; return a;}"
 assert 8 "int main(){int *a; return sizeof(a);}"
+assert 10 "int main(){int a[3]; *(a+2) = 10; int *p; p = a+2; return *p;}"
+assert 10 "int main(){int a[3]; a[2] = 10; return a[2];}"
+assert 10 "int main(){int a[3][3]; a[2][2] = 10; return a[2][2];}"
 echo OK

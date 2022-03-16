@@ -108,21 +108,40 @@ Node *new_node(NodeKind kind, Node *lhs, Node *rhs) {
   node->child[0] = lhs;
   node->child[1] = rhs;
   switch (kind) {
-  case ND_ASSIGN:
-    if(lhs->type->ty == rhs->type->ty)
+  case ND_ADD:
+    if (lhs->type->ty == INT && rhs->type->ty == INT)
+      node->type = lhs->type;
+    else if ((lhs->type->ty == PTR || lhs->type->ty == ARRAY) && 
+              rhs->type->ty == INT) 
+      node->type = lhs->type;
+    else if (lhs->type->ty == INT && 
+             (rhs->type->ty == PTR || rhs->type->ty == ARRAY)) 
       node->type = rhs->type;
     else 
-      error_at(token->str, "左の式と右の式の型が違います。\n");
+      error_at(token->str, "オペランドの型が妥当ではありません");
+    return node;
+  case ND_SUB:
+    if (lhs->type->ty == INT && rhs->type->ty == INT)
+      node->type = lhs->type;
+    else if ((lhs->type->ty == PTR || lhs->type->ty == ARRAY) && 
+              rhs->type->ty == INT) 
+      node->type = lhs->type;
+    else  
+      error_at(token->str, "オペランドの型が妥当ではありません");
+    return node;
+  case ND_ASSIGN:
+    if (lhs->type->ty == rhs->type->ty)
+      node->type = rhs->type;
+    else if (lhs->type->ty == PTR && rhs->type->ty == ARRAY)
+      node->type = rhs->type;
+    else 
+      error_at(token->str, "オペランドの型が妥当ではありません");
     return node;
   default:
     if (lhs->type->ty == INT && rhs->type->ty == INT)
       node->type = lhs->type;
-    else if (lhs->type->ty == PTR && rhs->type->ty == INT) 
-      node->type = lhs->type;
-    else if (lhs->type->ty == INT && rhs->type->ty == PTR) 
-      node->type = rhs->type;
-    else if (lhs->type->ty == PTR && rhs->type->ty == PTR) 
-      error_at(token->str, "左の式と右の式の両方がポインタ型です。\n");
+    else 
+      error_at(token->str, "オペランドの型が妥当ではありません");
     return node;
   }
 }
@@ -137,7 +156,7 @@ Node *new_node_num(int val) {
 }
 
 Node *expr();
-
+Node *add();
 
 Node *primary() {
   // "(" expr ")"
@@ -171,7 +190,7 @@ Node *primary() {
     }
   }
 
-  // ident 
+  // ident ("[" (num | ident) "]")*
   if (tok) {
     Node *node = calloc(1, sizeof(Node));
     node->kind = ND_LVAR;
@@ -182,6 +201,17 @@ Node *primary() {
       node->type = lvar->type;
     } else {
       error_at(tok->str, "宣言されていない変数です");
+    }
+
+    while (consume("[")) {
+      Node *n = add();
+      expect("]");
+      Node *add_node = new_node(ND_ADD, node, n);
+      Node *der_node = calloc(1, sizeof(Node));
+      der_node->kind = ND_DEREF;
+      der_node->type = add_node->type->ptr_to;
+      der_node->child[0] = add_node;
+      node = der_node;
     }
     return node;
   }
@@ -204,20 +234,29 @@ Node *unary() {
     return node;
   }
   if (consume("&")) {
+    Node *ch = unary();
+    if (ch->type->ty == ARRAY) 
+      return ch;
     Node *node = calloc(1, sizeof(Node));
     node->kind = ND_ADDR;
-    node->child[0] = unary();
+    node->child[0] = ch;
     node->type = calloc(1, sizeof(Type));
     node->type->ty = PTR;
     node->type->ptr_to = node->child[0]->type;
     return node;
   }
+
   if (consume("sizeof")) {
     Node *node = unary();
+    int all_size = 1;
+    Type *t;
     if (node->type->ty == INT) 
       return new_node_num(4);
-    else if (node->type->ty = PTR)
+    else if (node->type->ty == PTR)
       return new_node_num(8);
+    else if (node->type->ty == ARRAY) {
+      return new_node_num(node->type->array_size);
+    }
   }
   return primary();
 }
@@ -373,7 +412,7 @@ Node *stmt() {
     return node;
   }
 
-// "int" "*"* ident ;
+// "int" "*"* ident ("[" num "]")* ";"
   if (consume("int")) {
     node = calloc(1, sizeof(Node));
     node->kind = ND_DEC;
@@ -389,10 +428,59 @@ Node *stmt() {
     Token *tok = consume_ident();
     if (!tok) 
       error_at(token->str, "識別子ではありません");
+    int i = 0;
+    int array_size[10];
+    if (consume("[")) {
+      array_size[i++] = expect_number();
+      expect("]");
+      Type *t = calloc(1, sizeof(Type));
+      t->ty = ARRAY;
+      t->ptr_to = type;
+      type = t;
+    }
+    Type *t1 = type;
+    while(consume("[")) {
+      array_size[i++] = expect_number();
+      expect("]");
+      Type *t = calloc(1, sizeof(Type));
+      t->ty = ARRAY;
+      t->ptr_to = t1->ptr_to;
+      t1->ptr_to = t;
+      t1 = t;
+    }
+    i--;
+    if (i >= 0) {
+      switch (t1->ptr_to->ty) {
+      case INT:
+        array_size[i] *= 4;
+        break;
+      case PTR:
+        array_size[i] *= 8;
+        break;
+      }
+    }
+    for (i--;i>=0;i--) 
+      array_size[i] *= array_size[i+1];
+    i = 0;
+    for (t1 = type; t1->ty == ARRAY; t1 = t1->ptr_to) 
+      t1->array_size = array_size[i++];
+
+    int capacity;
+    switch (type->ty) {
+    case INT:
+    case PTR:
+      capacity = 8;
+      break;
+    case ARRAY:
+      capacity = type->array_size + (8 - type->array_size % 8) % 8;
+      break;
+    default:
+      error_at(token->str, "対応していない型です");
+    }
 
     node->child[0] = calloc(1, sizeof(Node));
     node->child[0]->kind = ND_LVAR;
-
+  
     LVar *lvar = find_lvar(tok);
     if (lvar) 
       error_at(tok->str, "変数を多重定義しています");
@@ -400,7 +488,7 @@ Node *stmt() {
     lvar->next = cur_func_info->locals;
     lvar->name = tok->str;
     lvar->len = tok->len;
-    lvar->offset = cur_func_info->locals->offset + 8;
+    lvar->offset = cur_func_info->locals->offset + capacity;
     lvar->type = type;
     node->child[0]->offset = lvar->offset;
     cur_func_info->locals = lvar;
